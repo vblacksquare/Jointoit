@@ -1,0 +1,15 @@
+djangorestframework
+Django
+pydantic
+pydantic-settings
+psycopg2-binary
+djangorestframework-simplejwt
+drf-spectacular
+asgiref
+uvicorn
+whitenoise
+celery
+redis
+django-redis
+python-json-logger
+PyYAML

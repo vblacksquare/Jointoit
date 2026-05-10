@@ -1,0 +1,11 @@
+{% extends "emails/base.html" %}
+
+{% block content %}
+<h2>Email verification</h2>
+
+<p>Hello, {{ username }}!</p>
+
+<p>Your verification code:</p>
+
+<h1>{{ code }}</h1>
+{% endblock %}

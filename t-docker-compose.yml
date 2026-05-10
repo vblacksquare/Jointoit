@@ -1,0 +1,179 @@
+x-logging: &default-logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+x-environment: &default-env
+  TZ: {timezone}
+
+
+services:
+  app:
+    <<: *default-logging
+    container_name: {name}-django
+    build: .
+    restart: always
+    tty: true
+    stdin_open: true
+    user: root
+    command: uvicorn Config.asgi:application --host 0.0.0.0 --port 8000 --log-config logging.yaml
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      static:
+        condition: service_completed_successfully
+    environment:
+      <<: *default-env
+
+  celery:
+    <<: *default-logging
+    container_name: {name}-celery
+    build: .
+    restart: always
+    command: celery -A Config worker -l info
+    volumes:
+      - .:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *default-env
+
+  celery-beat:
+    <<: *default-logging
+    container_name: {name}-celery-beat
+    build: .
+    restart: always
+    command: celery -A Config beat -l info
+    volumes:
+      - .:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *default-env
+
+  redis:
+    <<: *default-logging
+    container_name: {name}-redis
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - redis:/data
+    environment:
+      <<: *default-env
+
+  createsuperuser:
+    <<: *default-logging
+    container_name: {name}-script-createsuperuser
+    build: .
+    command: python manage.py admin
+    volumes:
+      - .:/app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      <<: *default-env
+
+  migrate:
+    <<: *default-logging
+    container_name: {name}-script-migrate
+    build: .
+    command: python manage.py migrate --noinput
+    volumes:
+      - .:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      <<: *default-env
+
+  static:
+    <<: *default-logging
+    container_name: {name}-script-static
+    build: .
+    command: python manage.py collectstatic --noinput
+    volumes:
+      - .:/app
+    environment:
+      <<: *default-env
+
+  loki:
+    <<: *default-logging
+    container_name: {name}-loki
+    image: grafana/loki:latest
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki:/loki
+    environment:
+      <<: *default-env
+
+  promtail:
+    <<: *default-logging
+    container_name: {name}-promtail
+    image: grafana/promtail:latest
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - ./promtail-config.yml:/etc/promtail/config.yml
+    command: -config.file=/etc/promtail/config.yml
+    environment:
+      <<: *default-env
+
+  grafana:
+    <<: *default-logging
+    container_name: {name}-grafana
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      <<: *default-env
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+
+  db:
+    <<: *default-logging
+    container_name: {name}-postgres
+    image: postgres:17-alpine
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d name"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "5432:5432"
+    volumes:
+      - db:/var/lib/postgresql/data
+    environment:
+      <<: *default-env
+      POSTGRES_DB: name
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+
+volumes:
+  db:
+  loki:
+  redis:
