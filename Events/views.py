@@ -48,6 +48,12 @@ class EventViewSet(viewsets.ModelViewSet):
     serializer_class = EventSerializer
     permission_classes = [permissions.IsAuthenticated, IsOrganizerOrReadOnly]
 
+    def paginate(self, queryset):
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            return page, True
+        return queryset, False
+
     def get_queryset(self):
         if self.action == 'list':
             return Event.objects.filter(organizer=self.request.user)
@@ -108,11 +114,15 @@ class EventViewSet(viewsets.ModelViewSet):
     def members(self, request, pk=None):
         event = self.get_object()
 
-        members = EventMember.objects.filter(event=event)
+        queryset = EventMember.objects.filter(event=event)
 
-        serializer = EventMemberSerializer(members, many=True)
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = EventMemberSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
 
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        serializer = EventMemberSerializer(queryset, many=True)
+        return Response(serializer.data)
 
     @extend_schema(
         summary="Kick Member",
@@ -181,11 +191,16 @@ class EventViewSet(viewsets.ModelViewSet):
             "date_to"
         )
 
+        page = validated_data.get(
+            "page"
+        )
+
         cache_key_raw = {
             "query": query_text,
             "organizer_id": organizer_id,
             "date_from": str(date_from),
             "date_to": str(date_to),
+            "page": page
         }
 
         cache_key = "event_search:" + hashlib.md5(
@@ -248,14 +263,14 @@ class EventViewSet(viewsets.ModelViewSet):
             "-date",
         )
 
-        serializer = EventSerializer(
-            queryset,
-            many=True,
-        )
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = EventSerializer(page, many=True)
+            data = self.get_paginated_response(serializer.data).data
+        else:
+            serializer = EventSerializer(queryset, many=True)
+            data = serializer.data
 
-        cache.set(cache_key, serializer.data, timeout=60 * 5)
+        cache.set(cache_key, data, timeout=60 * 5)
 
-        return Response(
-            serializer.data,
-            status=status.HTTP_200_OK,
-        )
+        return Response(data)

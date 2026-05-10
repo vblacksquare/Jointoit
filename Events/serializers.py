@@ -41,3 +41,7 @@ class SearchEventsSerializer(serializers.Serializer):
     date_to = serializers.DateTimeField(
         required=False
     )
+
+    page = serializers.IntegerField(
+        required=False
+    )
