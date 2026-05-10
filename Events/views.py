@@ -4,6 +4,9 @@ from django.contrib.postgres.search import (
     SearchRank,
     TrigramSimilarity
 )
+from django.core.cache import cache
+import hashlib
+import json
 from django.db.models import Q
 from drf_spectacular.utils import extend_schema_view, extend_schema, OpenApiResponse
 from rest_framework.decorators import action
@@ -178,6 +181,21 @@ class EventViewSet(viewsets.ModelViewSet):
             "date_to"
         )
 
+        cache_key_raw = {
+            "query": query_text,
+            "organizer_id": organizer_id,
+            "date_from": str(date_from),
+            "date_to": str(date_to),
+        }
+
+        cache_key = "event_search:" + hashlib.md5(
+            json.dumps(cache_key_raw, sort_keys=True).encode()
+        ).hexdigest()
+
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            return Response(cached_data, status=status.HTTP_200_OK)
+
         query = SearchQuery(
             query_text,
             config="simple",
@@ -234,6 +252,8 @@ class EventViewSet(viewsets.ModelViewSet):
             queryset,
             many=True,
         )
+
+        cache.set(cache_key, serializer.data, timeout=60 * 5)
 
         return Response(
             serializer.data,
