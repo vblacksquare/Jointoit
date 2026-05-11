@@ -1,5 +1,6 @@
 from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
+from django.contrib.auth.hashers import check_password
 from config import get_config
 
 
@@ -19,6 +20,10 @@ class Command(BaseCommand):
         user = User.objects.filter(name=name).first()
 
         if user:
+            if [name, email] == [user.name, user.email] and check_password(password, user.password):
+                self.stdout.write(self.style.SUCCESS("Superuser already up to date"))
+                return
+
             user.name = name
             user.email = email
             user.is_staff = True

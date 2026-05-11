@@ -69,6 +69,7 @@ services:
     <<: *default-logging
     container_name: {name}-redis
     image: redis:7-alpine
+    command: redis-server --appendonly yes
     restart: always
     ports:
       - "6379:6379"
@@ -122,6 +123,7 @@ services:
     <<: *default-logging
     container_name: {name}-loki
     image: grafana/loki:latest
+    restart: always
     ports:
       - "3100:3100"
     command: -config.file=/etc/loki/local-config.yaml
@@ -150,8 +152,11 @@ services:
       - "3000:3000"
     environment:
       <<: *default-env
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_USER: {admin_name}
+      GF_SECURITY_ADMIN_PASSWORD: {admin_password}
+    volumes:
+      - grafana:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
 
   db:
     <<: *default-logging
@@ -164,16 +169,17 @@ services:
       timeout: 5s
       retries: 5
     ports:
-      - "5432:5432"
+      - "{database_port}:5432"
     volumes:
       - db:/var/lib/postgresql/data
     environment:
       <<: *default-env
-      POSTGRES_DB: name
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: {database_name}
+      POSTGRES_USER: {database_user}
+      POSTGRES_PASSWORD: {database_password}
 
 volumes:
   db:
   loki:
   redis:
+  grafana:
